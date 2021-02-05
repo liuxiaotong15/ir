@@ -9,7 +9,8 @@ import os
 for i in range(133885):
     try:
         print('-' * 100, i)
-        os.system('ls | grep -v water.py | grep -v qm9*.db | xargs rm')
+        # os.system('ls | grep -v water.py | grep -v qm9*.db | xargs rm')
+        os.system('rm -rf *.pckl vasprun.xml')
         a = read('qm9.db@' + str(i))
         a.set_cell([10, 10, 10])
         a.set_pbc([1, 1, 1])
