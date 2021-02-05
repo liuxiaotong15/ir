@@ -28,7 +28,7 @@ for i in range(133885):
         ir.run()
         ir.summary()
         with connect('qm9_ir_spectrum.db') as db:
-            db.write(a, data={'ir_spectrum':ir.get_spectrum()[0]})
+            db.write(a, data={'ir_spectrum':ir.get_spectrum()})
             # print(ir.get_spectrum()[0].shape)
     except:
         pass
