@@ -5,8 +5,9 @@ row = db.get(1)
 print(row.toatoms())
 
 print(row.data.ir_spectrum[0])
-print(row.data.ir_spectrum[1])
+print(len(row.data.ir_spectrum[1]))
 
 for i,j  in zip(row.data.ir_spectrum[0], row.data.ir_spectrum[1]):
     if j > 0.1:
-        print(i, j)
+        pass
+        # print(i, j)
