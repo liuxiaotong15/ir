@@ -1,6 +1,5 @@
 from ase.build import bulk
 from ase import Atom, Atoms
-from dscribe.descriptors import SOAP
 import random
 import numpy as np
 
@@ -11,93 +10,82 @@ np.random.seed(seed)
 train_ratio = 0.8
 vali_ratio = 0.1
 
-rcut = 6.0
-nmax = 8
-lmax = 6
-
 from ase.db import connect
-predict_item = 'eta'
-db_name = 'mossbauer.db'
-db = connect(db_name)
+db_ir = connect('qm9_ir_spectrum.db')
+db_qm9 = connect('qm9.db')
+
+rows_ir = list(db_ir.select())
+rows_qm9 = list(db_qm9.select())
+# row = db_ir.get(1)
+# tgt_len = len(row.data.ir_spectrum[1])
+
+with open('qm9_id_boc.lst', 'rb') as fp:
+    c = pickle.load(fp)
+
 
 import torch
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
-torch.set_default_tensor_type(torch.DoubleTensor)
+# torch.set_default_tensor_type(torch.DoubleTensor)
 
 import torch.nn as nn
 import torch.nn.functional as F
 
 class Model(nn.Module):
-    def __init__(self, input_node):
+    def __init__(self, input_node, output_node):
         super(Model, self).__init__()
         self.fc1 = nn.Linear(input_node, 256)
         self.fc2 = nn.Linear(256, 128)
         self.fc3 = nn.Linear(128, 64)
         self.fc4 = nn.Linear(64, 32)
-        self.fc5 = nn.Linear(32, 1)
+        self.fc5 = nn.Linear(32, output_node)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
-        x = self.fc5(x)
+        x = F.relu(self.fc5(x))
         return x
 
 
-def extract_descriptor(rows):
-    soaps, targets = [], []
-    for row in rows:
-        atoms_Au_Fe = row.toatoms()
-        atoms_all_Fe = Atoms()
-        atoms_all_Fe.set_cell(atoms_Au_Fe.get_cell())
-        atoms_all_Fe.set_pbc(atoms_Au_Fe.get_pbc())
-        Au_idx_lst = []
-        for idx, at in enumerate(atoms_Au_Fe):
-            if at.symbol == 'Fe':
-                atoms_all_Fe.append(Atom(at.symbol, at.position))
-            elif at.symbol == 'Au':
-                atoms_all_Fe.append(Atom('Fe', at.position))
-                Au_idx_lst.append(idx)
-            else:
-                atoms_all_Fe.append(Atom(at.symbol, at.position))
-        species = []
-        for at in atoms_all_Fe:
-            species.append(at.symbol)
-        species = list(set(species))
-        periodic_soap = SOAP(
-            species=species,
-            rcut=rcut,
-            nmax=nmax,
-            lmax=nmax,
-            periodic=True,
-            sparse=False)
-        # print(Au_idx_lst, atoms_all_Fe.get_pbc(), species)
-        soap_crystal = periodic_soap.create(atoms_all_Fe, positions=Au_idx_lst)
-        # print(soap_crystal.shape, periodic_soap.get_number_of_features())
-        soaps.append(np.mean(soap_crystal, axis=0))
-        targets.append(([(row.data[predict_item])]))
-        # print(soaps[-1].shape[0], targets[-1])
-        # print('-' * 100)
-    return soaps, targets
+def extract_descriptor(rows_input):
+    bocs, targets = [], []
+    for row in rows_input:
+        #### check if molecular formula in ir.db is the same with qm9.db #####
+        sym1 = row.toatoms().symbols
+        sym2 = rows_qm9[row.id].toatoms().symbols
+        if sym1 != sym2:
+            print('db order mismatch...')
+            exit(0)
+
+        #### read boc from pre_calculated boc.lst #########
+        boc.append(c[row.id][1])
+
+        #### read ir targets from ir.db ##############
+        targets.append(row.data.ir_spectrum[1])
+    
+    #### shuffle ####
+    shfl = list(zip(bocs, targets))
+    random.shuffle(shfl)
+    bocs, targets = zip(*shfl)
+    return bocs, targets
 
 if __name__ == '__main__':
-    rows = list(db.select())
-    random.shuffle(rows)
+    
     # training dataset
-    soap_lst, tgt_lst = extract_descriptor(rows[:int(train_ratio * len(rows))])
+    boc_lst, tgt_lst = extract_descriptor(rows_ir[:int(train_ratio * len(rows_ir))])
     # vali dataset 
-    vali_soap_lst, vali_tgt_lst = extract_descriptor(rows[int(train_ratio * len(rows)):int((train_ratio + vali_ratio) * len(rows))])
+    vali_boc_lst, vali_tgt_lst = extract_descriptor(rows_ir[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))])
     # train
-    model = Model(soap_lst[0].shape[0])
+    model = Model(boc_lst[0].shape[0], tgt_lst[0].shape[0])
 
     criterion = torch.nn.MSELoss() # Defined loss function
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001) # Defined optimizer
     
-    x_data = torch.from_numpy(np.array(soap_lst)).to('cpu')
+    x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
     y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
-    x_data_vali = torch.from_numpy(np.array(vali_soap_lst)).to('cpu')
+    x_data_vali = torch.from_numpy(np.array(vali_boc_lst)).to('cpu')
     y_data_vali = torch.from_numpy(np.array(vali_tgt_lst)).to('cpu')
 
     min_loss = 999
@@ -130,9 +118,9 @@ if __name__ == '__main__':
         optimizer.step()
     model.load_state_dict(torch.load('best_model.dict'))
     # inference dataset
-    soap_lst, tgt_lst = extract_descriptor(rows[int((train_ratio+vali_ratio) * len(rows)):])
+    boc_lst, tgt_lst = extract_descriptor(rows_ir[int((train_ratio+vali_ratio) * len(rows_ir)):])
     # inference
-    x_data = torch.from_numpy(np.array(soap_lst)).to('cpu')
+    x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
     y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
 
     y_pred = model(x_data.double())
