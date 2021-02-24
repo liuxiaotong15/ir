@@ -39,12 +39,13 @@ import torch.nn.functional as F
 
 class Model(nn.Module):
     def __init__(self, input_node, output_node):
+        print('model info:', input_node, output_node)
         super(Model, self).__init__()
         self.fc1 = nn.Linear(input_node, 256)
-        self.fc2 = nn.Linear(256, 128)
-        self.fc3 = nn.Linear(128, 64)
-        self.fc4 = nn.Linear(64, 32)
-        self.fc5 = nn.Linear(32, output_node)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, 256)
+        self.fc4 = nn.Linear(256, 256)
+        self.fc5 = nn.Linear(256, output_node)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -52,6 +53,7 @@ class Model(nn.Module):
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
         x = F.relu(self.fc5(x))
+        # x = torch.sigmoid(self.fc5(x))
         return x
 
 
@@ -74,7 +76,8 @@ def extract_descriptor(rows_input):
         bocs.append(c[row.id-1+extra_adding][1])
 
         #### read ir targets from ir.db ##############
-        targets.append(row.data.ir_spectrum[1])
+        s = np.array(row.data.ir_spectrum[1])
+        targets.append(s/np.amax(s))
     
     #### shuffle ####
     shfl = list(zip(bocs, targets))
@@ -91,10 +94,12 @@ if __name__ == '__main__':
     model = Model(boc_lst[0].shape[0], tgt_lst[0].shape[0])
 
     criterion = torch.nn.MSELoss() # Defined loss function
+    # criterion = torch.nn.CosineEmbeddingLoss(reduction='none') # Defined loss function
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001) # Defined optimizer
     
     x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
     y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
+    print('x, y shape:', x_data.shape, y_data.shape)
     x_data_vali = torch.from_numpy(np.array(vali_boc_lst)).to('cpu')
     y_data_vali = torch.from_numpy(np.array(vali_tgt_lst)).to('cpu')
 
@@ -107,6 +112,7 @@ if __name__ == '__main__':
     
         # Compute loss
         loss = criterion(y_pred, y_data)
+        # loss = criterion(y_pred, y_data).sum()
 
         # Forward pass vali
         y_pred_vali = model(x_data_vali.double())
@@ -123,6 +129,7 @@ if __name__ == '__main__':
         # Zero gradients
         optimizer.zero_grad()
         # perform backward pass
+
         loss.backward()
         # update weights
         optimizer.step()
@@ -138,7 +145,8 @@ if __name__ == '__main__':
     # check error
     err_sum = 0
     for i in range(y_data.shape[0]):
-        err_sum += abs(y_data.detach().numpy()[i][0] - y_pred.detach().numpy()[i][0])
-        print(y_data.shape[0], y_data.detach().numpy()[i][0], y_pred.detach().numpy()[i][0])
+        err_sum += abs(y_data.detach().numpy()[i].mean() - y_pred.detach().numpy()[i].mean())
+        print(y_data.shape[0], y_data.detach().numpy()[i].mean(), y_pred.detach().numpy()[i].mean(), 
+                np.amax(y_pred.detach().numpy()[i]), np.amax(y_data.detach().numpy()[i]))
     print(err_sum/y_data.shape[0])
 
