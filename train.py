@@ -1,7 +1,9 @@
+import torch
 from ase.build import bulk
 from ase import Atom, Atoms
-import random
+import random, pickle
 import numpy as np
+from ase.formula import Formula
 
 seed = 1234
 random.seed(seed)
@@ -19,14 +21,18 @@ rows_qm9 = list(db_qm9.select())
 # row = db_ir.get(1)
 # tgt_len = len(row.data.ir_spectrum[1])
 
+print('db load finish...')
+
 with open('qm9_id_boc.lst', 'rb') as fp:
     c = pickle.load(fp)
 
+print('pickle load finish...')
 
-import torch
+extra_adding = 0 # due to the exception in ir.py
+
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
-# torch.set_default_tensor_type(torch.DoubleTensor)
+torch.set_default_tensor_type(torch.DoubleTensor)
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -50,17 +56,22 @@ class Model(nn.Module):
 
 
 def extract_descriptor(rows_input):
+    global extra_adding
+    print('extract descriptor start')
     bocs, targets = [], []
     for row in rows_input:
         #### check if molecular formula in ir.db is the same with qm9.db #####
-        sym1 = row.toatoms().symbols
-        sym2 = rows_qm9[row.id].toatoms().symbols
-        if sym1 != sym2:
-            print('db order mismatch...')
-            exit(0)
+        sym1 = 'C'
+        sym2 = 'B'
+        while(Formula(str(sym1)) != Formula(str(sym2))):
+            if str(sym1) != 'C' and str(sym2) != 'B':
+                print(row.id, sym1, sym2, 'An mismatch occur, extra id:', extra_adding)
+                extra_adding += 1
+            sym1 = row.toatoms().symbols
+            sym2 = rows_qm9[row.id-1+extra_adding].toatoms().symbols
 
         #### read boc from pre_calculated boc.lst #########
-        boc.append(c[row.id][1])
+        bocs.append(c[row.id-1+extra_adding][1])
 
         #### read ir targets from ir.db ##############
         targets.append(row.data.ir_spectrum[1])
@@ -72,7 +83,6 @@ def extract_descriptor(rows_input):
     return bocs, targets
 
 if __name__ == '__main__':
-    
     # training dataset
     boc_lst, tgt_lst = extract_descriptor(rows_ir[:int(train_ratio * len(rows_ir))])
     # vali dataset 
