@@ -41,12 +41,13 @@ import torch.nn.functional as F
 class Model(nn.Module):
     def __init__(self, input_node, output_node):
         print('model info:', input_node, output_node)
+        node_cnt = 256
         super(Model, self).__init__()
-        self.fc1 = nn.Linear(input_node, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 256)
-        self.fc4 = nn.Linear(256, 256)
-        self.fc5 = nn.Linear(256, output_node)
+        self.fc1 = nn.Linear(input_node, node_cnt)
+        self.fc2 = nn.Linear(node_cnt, node_cnt)
+        self.fc3 = nn.Linear(node_cnt, node_cnt)
+        self.fc4 = nn.Linear(node_cnt, node_cnt)
+        self.fc5 = nn.Linear(node_cnt, output_node)
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
@@ -54,6 +55,8 @@ class Model(nn.Module):
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
         x = F.relu(self.fc5(x))
+        # x = torch.pow(x, 0.3)
+        # x /= torch.max(x)
         # x = torch.sigmoid(self.fc5(x))
         return x
 
@@ -98,7 +101,7 @@ if __name__ == '__main__':
 
     criterion = torch.nn.MSELoss() # Defined loss function
     # criterion = torch.nn.CosineEmbeddingLoss(reduction='none') # Defined loss function
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001) # Defined optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4) # Defined optimizer
     
     x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
     y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
@@ -109,11 +112,12 @@ if __name__ == '__main__':
     min_loss = 999
     # Training: forward, loss, backward, step
     # Training loop
-    for epoch in range(200):
+    for epoch in range(1000):
         # Forward pass
         y_pred = model(x_data.double())
     
         # Compute loss
+        y_pred = y_pred/torch.max(y_pred)
         loss = criterion(y_pred, y_data)
         # loss = criterion(y_pred, y_data).sum()
 
@@ -149,8 +153,7 @@ if __name__ == '__main__':
     err_sum = 0
     for i in range(y_data.shape[0]):
         ###### save y1 y2 data randomly
-        if i == 0:
-            np.savetxt('data.txt', (y_data.detach().numpy()[i], y_pred.detach().numpy()[i]))
+        np.savetxt('data'+ str(i) +'.txt', (y_data.detach().numpy()[i], y_pred.detach().numpy()[i]))
         ##### print
         err_sum += abs(y_data.detach().numpy()[i].mean() - y_pred.detach().numpy()[i].mean())
         print(y_data.shape[0], y_data.detach().numpy()[i].mean(), y_pred.detach().numpy()[i].mean(), 
