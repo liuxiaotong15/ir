@@ -5,6 +5,7 @@ import random, pickle
 import numpy as np
 from ase.formula import Formula
 
+
 seed = 1234
 random.seed(seed)
 np.random.seed(seed)
@@ -86,10 +87,12 @@ def extract_descriptor(rows_input):
     return bocs, targets
 
 if __name__ == '__main__':
+    boc_lst_all, tgt_lst_all = extract_descriptor(rows_ir[:])
     # training dataset
-    boc_lst, tgt_lst = extract_descriptor(rows_ir[:int(train_ratio * len(rows_ir))])
+    boc_lst, tgt_lst = boc_lst_all[:int(train_ratio * len(rows_ir))], tgt_lst_all[:int(train_ratio * len(rows_ir))]
     # vali dataset 
-    vali_boc_lst, vali_tgt_lst = extract_descriptor(rows_ir[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))])
+    vali_boc_lst, vali_tgt_lst = boc_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))], tgt_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))]
+
     # train
     model = Model(boc_lst[0].shape[0], tgt_lst[0].shape[0])
 
@@ -106,7 +109,7 @@ if __name__ == '__main__':
     min_loss = 999
     # Training: forward, loss, backward, step
     # Training loop
-    for epoch in range(1000):
+    for epoch in range(200):
         # Forward pass
         y_pred = model(x_data.double())
     
@@ -135,7 +138,7 @@ if __name__ == '__main__':
         optimizer.step()
     model.load_state_dict(torch.load('best_model.dict'))
     # inference dataset
-    boc_lst, tgt_lst = extract_descriptor(rows_ir[int((train_ratio+vali_ratio) * len(rows_ir)):])
+    boc_lst, tgt_lst = boc_lst_all[int((train_ratio+vali_ratio) * len(rows_ir)):], tgt_lst_all[int((train_ratio+vali_ratio) * len(rows_ir)):]
     # inference
     x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
     y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
@@ -145,6 +148,10 @@ if __name__ == '__main__':
     # check error
     err_sum = 0
     for i in range(y_data.shape[0]):
+        ###### save y1 y2 data randomly
+        if i == 0:
+            np.savetxt('data.txt', (y_data.detach().numpy()[i], y_pred.detach().numpy()[i]))
+        ##### print
         err_sum += abs(y_data.detach().numpy()[i].mean() - y_pred.detach().numpy()[i].mean())
         print(y_data.shape[0], y_data.detach().numpy()[i].mean(), y_pred.detach().numpy()[i].mean(), 
                 np.amax(y_pred.detach().numpy()[i]), np.amax(y_data.detach().numpy()[i]))
