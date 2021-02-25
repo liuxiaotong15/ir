@@ -38,6 +38,12 @@ torch.set_default_tensor_type(torch.DoubleTensor)
 import torch.nn as nn
 import torch.nn.functional as F
 
+def l1_penalty(var):
+    return torch.abs(var).sum()
+
+def l2_penalty(var):
+    return torch.sqrt(torch.pow(var, 2).sum())
+
 class Model(nn.Module):
     def __init__(self, input_node, output_node):
         print('model info:', input_node, output_node)
@@ -119,14 +125,17 @@ if __name__ == '__main__':
     
         # Compute loss
         y_pred = y_pred/torch.max(y_pred)
-        loss = criterion(y_pred, y_data)
+        # loss = criterion(y_pred, y_data) # + 1e-10 * l1_penalty(y_pred)
+        loss = criterion(y_pred, y_data) - 1e-5 * torch.cosine_similarity(y_pred, y_data, dim=1).sum() # + 1e-10 * l1_penalty(y_pred)
         # loss = criterion(y_pred, y_data).sum()
 
         # Forward pass vali
         y_pred_vali = model(x_data_vali.double())
-    
+        # y_pred_vali = y_pred_vali/torch.max(y_pred_vali)
+
         # Compute loss vali
-        loss_vali = criterion(y_pred_vali, y_data_vali)
+        # loss_vali = criterion(y_pred_vali, y_data_vali)
+        loss_vali = criterion(y_pred_vali, y_data_vali) - 1e-5 * torch.cosine_similarity(y_pred_vali, y_data_vali, dim=1).sum()
 
         print(epoch, loss.item(), loss_vali.item())
 
