@@ -65,6 +65,7 @@ def extract_descriptor(rows_input):
     global extra_adding
     print('extract descriptor start')
     bocs, targets = [], []
+    id_sym_dict = {}
     for row in rows_input:
         #### check if molecular formula in ir.db is the same with qm9.db #####
         sym1 = 'C'
@@ -75,14 +76,14 @@ def extract_descriptor(rows_input):
                 extra_adding += 1
             sym1 = row.toatoms().symbols
             sym2 = rows_qm9[row.id-1+extra_adding].toatoms().symbols
-
+        id_sym_dict[row.id] = str(sym1)
         #### read boc from pre_calculated boc.lst #########
         bocs.append(c[row.id-1+extra_adding][1])
 
         #### read ir targets from ir.db ##############
         s = np.array(row.data.ir_spectrum[1])
         targets.append(s/np.amax(s))
-    
+    np.save('data_id.npy', id_sym_dict) 
     #### shuffle ####
     shfl = list(zip(bocs, targets))
     random.shuffle(shfl)
@@ -152,9 +153,7 @@ if __name__ == '__main__':
     # check error
     err_sum = 0
     for i in range(y_data.shape[0]):
-        ###### save y1 y2 data randomly
         np.savetxt('data'+ str(i) +'.txt', (y_data.detach().numpy()[i], y_pred.detach().numpy()[i]))
-        ##### print
         err_sum += abs(y_data.detach().numpy()[i].mean() - y_pred.detach().numpy()[i].mean())
         print(y_data.shape[0], y_data.detach().numpy()[i].mean(), y_pred.detach().numpy()[i].mean(), 
                 np.amax(y_pred.detach().numpy()[i]), np.amax(y_data.detach().numpy()[i]))
