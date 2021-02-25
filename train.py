@@ -125,8 +125,8 @@ if __name__ == '__main__':
     
         # Compute loss
         y_pred = y_pred/torch.max(y_pred)
-        # loss = criterion(y_pred, y_data) # + 1e-10 * l1_penalty(y_pred)
-        loss = criterion(y_pred, y_data) - 1e-5 * torch.cosine_similarity(y_pred, y_data, dim=1).sum() # + 1e-10 * l1_penalty(y_pred)
+        loss = criterion(y_pred, y_data) # + 1e-10 * l1_penalty(y_pred)
+        # loss = criterion(y_pred, y_data) - 1e-4 * torch.cosine_similarity(y_pred, y_data, dim=1).sum() # + 1e-10 * l1_penalty(y_pred)
         # loss = criterion(y_pred, y_data).sum()
 
         # Forward pass vali
@@ -134,8 +134,8 @@ if __name__ == '__main__':
         # y_pred_vali = y_pred_vali/torch.max(y_pred_vali)
 
         # Compute loss vali
-        # loss_vali = criterion(y_pred_vali, y_data_vali)
-        loss_vali = criterion(y_pred_vali, y_data_vali) - 1e-5 * torch.cosine_similarity(y_pred_vali, y_data_vali, dim=1).sum()
+        loss_vali = criterion(y_pred_vali, y_data_vali)
+        # loss_vali = criterion(y_pred_vali, y_data_vali) - 1e-4 * torch.cosine_similarity(y_pred_vali, y_data_vali, dim=1).sum()
 
         print(epoch, loss.item(), loss_vali.item())
 
