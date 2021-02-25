@@ -23,8 +23,8 @@ for i in range(100):
     
     x = np.array(list(range(len(y1)))) * 0.4 + 800
     
-    ax.plot(x, y2, label='DFT_IR_' + data_id[i+1], alpha=0.7)
-    ax.plot(x, y1, label='E2E_IR_' + data_id[i+1], alpha=1.0)
+    ax.plot(x, y2, label='E2E_IR_' + data_id[i+1], alpha=0.7)
+    ax.plot(x, y1, label='DFT_IR_' + data_id[i+1], alpha=1.0)
     
     ax.tick_params(labelsize=15)
     ax.legend(loc='upper right', prop=font_legend)
