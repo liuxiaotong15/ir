@@ -71,6 +71,7 @@ def extract_descriptor(rows_input):
     global extra_adding
     print('extract descriptor start')
     bocs, targets = [], []
+    row_ids, syms = [], [] 
     id_sym_dict = {}
     for row in rows_input:
         #### check if molecular formula in ir.db is the same with qm9.db #####
@@ -82,18 +83,24 @@ def extract_descriptor(rows_input):
                 extra_adding += 1
             sym1 = row.toatoms().symbols
             sym2 = rows_qm9[row.id-1+extra_adding].toatoms().symbols
-        id_sym_dict[row.id] = str(sym1)
+        row_ids.append(row.id)
+        syms.append(str(sym1))
         #### read boc from pre_calculated boc.lst #########
         bocs.append(c[row.id-1+extra_adding][1])
 
         #### read ir targets from ir.db ##############
         s = np.array(row.data.ir_spectrum[1])
         targets.append(s/np.amax(s))
-    np.save('data_id.npy', id_sym_dict) 
+
     #### shuffle ####
-    shfl = list(zip(bocs, targets))
+    shfl = list(zip(bocs, targets, row_ids, syms))
     random.shuffle(shfl)
-    bocs, targets = zip(*shfl)
+    bocs, targets, row_ids, syms = zip(*shfl)
+    for i in range(len(row_ids)):
+        id_sym_dict[row_ids[i]] = syms[i]
+    
+    np.save('data_id.npy', id_sym_dict) 
+
     return bocs, targets
 
 if __name__ == '__main__':
@@ -124,7 +131,6 @@ if __name__ == '__main__':
         y_pred = model(x_data.double())
     
         # Compute loss
-        y_pred = y_pred/torch.max(y_pred)
         loss = criterion(y_pred, y_data) # + 1e-10 * l1_penalty(y_pred)
         # loss = criterion(y_pred, y_data) - 1e-4 * torch.cosine_similarity(y_pred, y_data, dim=1).sum() # + 1e-10 * l1_penalty(y_pred)
         # loss = criterion(y_pred, y_data).sum()
