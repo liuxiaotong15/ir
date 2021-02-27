@@ -11,7 +11,7 @@ font_legend = {'family' : 'Times New Roman',
 }
 data_id = np.load('data_id.npy', allow_pickle=True).item()
 
-for i in range(100):
+for i in range(971, 1079): ## modify to the real range
     fig = plt.figure(1)
     ax = fig.add_subplot(111)
 
