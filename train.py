@@ -44,6 +44,12 @@ def l1_penalty(var):
 def l2_penalty(var):
     return torch.sqrt(torch.pow(var, 2).sum())
 
+def svm_penalty(var1, var2):
+    c = 0.2
+    t = torch.abs(var1-var2)-c
+    t2 = torch.clamp(t, min=0)
+    return torch.sqrt(torch.pow(t2, 2).sum())
+
 class Model(nn.Module):
     def __init__(self, input_node, output_node):
         print('model info:', input_node, output_node)
@@ -83,6 +89,11 @@ def extract_descriptor(rows_input):
                 extra_adding += 1
             sym1 = row.toatoms().symbols
             sym2 = rows_qm9[row.id-1+extra_adding].toatoms().symbols
+        if(str(sym1)=='CH4'):
+            for i,j  in zip(row.data.ir_spectrum[0], row.data.ir_spectrum[1]):
+                if j>0.001:
+                    print(i, j)
+
         row_ids.append(row.id)
         syms.append(str(sym1))
         #### read boc from pre_calculated boc.lst #########
@@ -132,6 +143,7 @@ if __name__ == '__main__':
     
         # Compute loss
         loss = criterion(y_pred, y_data) # + 1e-10 * l1_penalty(y_pred)
+        # loss = svm_penalty(y_pred, y_data) # + 1e-10 * l1_penalty(y_pred)
         # loss = criterion(y_pred, y_data) - 1e-4 * torch.cosine_similarity(y_pred, y_data, dim=1).sum() # + 1e-10 * l1_penalty(y_pred)
         # loss = criterion(y_pred, y_data).sum()
 
@@ -141,6 +153,7 @@ if __name__ == '__main__':
 
         # Compute loss vali
         loss_vali = criterion(y_pred_vali, y_data_vali)
+        # loss_vali = svm_penalty(y_pred_vali, y_data_vali)
         # loss_vali = criterion(y_pred_vali, y_data_vali) - 1e-4 * torch.cosine_similarity(y_pred_vali, y_data_vali, dim=1).sum()
 
         print(epoch, loss.item(), loss_vali.item())
@@ -158,7 +171,8 @@ if __name__ == '__main__':
         optimizer.step()
     model.load_state_dict(torch.load('best_model.dict'))
     # inference dataset
-    boc_lst, tgt_lst = boc_lst_all[int((train_ratio+vali_ratio) * len(rows_ir)):], tgt_lst_all[int((train_ratio+vali_ratio) * len(rows_ir)):]
+    moving = int((train_ratio+vali_ratio) * len(rows_ir))
+    boc_lst, tgt_lst = boc_lst_all[moving:], tgt_lst_all[moving:]
     # inference
     x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
     y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
@@ -168,7 +182,7 @@ if __name__ == '__main__':
     # check error
     err_sum = 0
     for i in range(y_data.shape[0]):
-        np.savetxt('data'+ str(i) +'.txt', (y_data.detach().numpy()[i], y_pred.detach().numpy()[i]))
+        np.savetxt('data'+ str(i + moving) +'.txt', (y_data.detach().numpy()[i], y_pred.detach().numpy()[i]))
         err_sum += abs(y_data.detach().numpy()[i].mean() - y_pred.detach().numpy()[i].mean())
         print(y_data.shape[0], y_data.detach().numpy()[i].mean(), y_pred.detach().numpy()[i].mean(), 
                 np.amax(y_pred.detach().numpy()[i]), np.amax(y_data.detach().numpy()[i]))
