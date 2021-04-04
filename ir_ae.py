@@ -30,16 +30,6 @@ for row in rows_lst:
 #     if j > 0.1:
 #         print(i, j)
 
-
-if not os.path.exists('./dc_img'):
-    os.mkdir('./dc_img')
- 
- 
-def to_img(x):
-    x = 0.5 * (x + 1)
-    x = x.clamp(0, 1)
-    x = x.view(x.size(0), 3, 28, 28)
-    return x
  
 num_epochs = 100
 batch_size = 128
@@ -47,6 +37,15 @@ learning_rate = 1e-3
 
 ir_data_tensor = torch.tensor(ir_data)
 print(ir_data_tensor[:batch_size].shape[0])
+max_ir = torch.max(ir_data_tensor, 1)[0]
+
+print(ir_data_tensor.shape)
+print(max_ir.view(-1,1).shape)
+
+print(torch.div(ir_data_tensor, max_ir.view(-1, 1)))
+
+print(torch.max(torch.div(ir_data_tensor, max_ir.view(-1, 1)), 1)[0])
+ir_data_tensor = torch.div(ir_data_tensor, max_ir.view(-1, 1))
 
 img_transform = transforms.Compose([
     transforms.ToTensor(),
@@ -58,53 +57,26 @@ transform = transforms.Compose([
     transforms.Lambda(lambda x: x.repeat(3,1,1)),
     transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
     ])
-
-# dataset = MNIST('./data', transform=img_transform)
-# dataset = MNIST('./data', transform=transform)
-# dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
- 
-class autoencoder(nn.Module):
-    def __init__(self):
-        super(autoencoder, self).__init__()
-        self.encoder = nn.Sequential(
-            nn.Conv2d(3, 16, 3, stride=3, padding=1),  # b, 16, 10, 10
-            nn.ReLU(True),
-            nn.MaxPool2d(2, stride=2),  # b, 16, 5, 5
-            nn.Conv2d(16, 8, 3, stride=2, padding=1),  # b, 8, 3, 3
-            nn.ReLU(True),
-            nn.MaxPool2d(2, stride=1)  # b, 8, 2, 2
-        )
-        self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(8, 16, 3, stride=2),  # b, 16, 5, 5
-            nn.ReLU(True),
-            nn.ConvTranspose2d(16, 8, 5, stride=3, padding=1),  # b, 8, 15, 15
-            nn.ReLU(True),
-            nn.ConvTranspose2d(8, 3, 2, stride=2, padding=1),  # b, 1, 28, 28
-            nn.Tanh()
-        )
- 
-    def forward(self, x):
-        x = self.encoder(x)
-        x = self.decoder(x)
-        return x
  
 class autoencoder_ir(nn.Module):
     def __init__(self, input_size):
         super(autoencoder_ir, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_size, 2048),
-            nn.ReLU(True),
-            nn.Linear(2048, 512),
-            nn.ReLU(True),
-            nn.Linear(512, 128),
+            # nn.ReLU(True),
+            # nn.Linear(2048, 2048),
+            # nn.ReLU(True),
+            # nn.Linear(2048, 1024),
         )
         self.decoder = nn.Sequential(
-            nn.Linear(128, 512),
-            nn.ReLU(True),
-            nn.Linear(512, 2048),
-            nn.ReLU(True),
+            # nn.Linear(1024, 2048),
+            # nn.ReLU(True),
+            # nn.Linear(2048, 2048),
+            # nn.ReLU(True),
             nn.Linear(2048, input_size),
+            # nn.functional.softmax(True)
+            nn.ReLU(True),
+            # nn.Sigmoid(),
         )
  
     def forward(self, x):
@@ -118,20 +90,32 @@ criterion = nn.MSELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                              weight_decay=1e-5)
 
+l1_lambda = 1e-2
+
 for epoch in range(num_epochs):
     for i in range(ir_data_tensor.shape[0]//batch_size):
         batch_data = ir_data_tensor[i*batch_size:(i+1)*batch_size]
         batch_data = Variable(batch_data).cuda()
         # ===================forward=====================
         output = model(batch_data.float())
+        regularization_loss = 0
+        for param in model.parameters():
+            regularization_loss += torch.sum(abs(param))
         loss = criterion(output, batch_data.float())
+        loss_total = loss + l1_lambda * regularization_loss
         # ===================backward====================
         optimizer.zero_grad()
-        loss.backward()
+        loss_total.backward()
         optimizer.step()
     # ===================log========================
+    regularization_loss = 0
+    for param in model.parameters():
+        regularization_loss += torch.sum(abs(param))
+    
     print('epoch [{}/{}], loss:{:.4f}'
           .format(epoch+1, num_epochs, loss.data))
+    print(torch.max(batch_data, 1)[0])
+    print(torch.max(output, 1)[0])
           # .format(epoch+1, num_epochs, loss.data[0]))
     # if epoch % 10 == 0:
     #     pic = to_img(output.cpu().data)
