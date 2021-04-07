@@ -44,3 +44,19 @@ ax1.set_ylim(0, ax1.get_ylim()[1])
 plt.subplots_adjust(bottom=0.12, right=0.88, left=0.12, top=0.99)
 
 plt.show()
+
+fig = plt.figure(1)
+ax = fig.add_subplot(111)
+
+filename = 'pca_train.log'
+X,Y1 = [],[]
+
+with open(filename, 'r') as f:
+    lines = f.readlines()
+    for line in lines:
+        value = [float(s) for s in line.split()]
+        X.append(value[0])
+        Y1.append(value[1])
+
+ln1 = ax.scatter(X, Y1, label='Test loss (left)')
+plt.show()
