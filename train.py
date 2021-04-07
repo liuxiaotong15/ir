@@ -122,7 +122,7 @@ def extract_descriptor(rows_input):
     return bocs, targets
 
 if __name__ == '__main__':
-    for comp in range(10, 1000, 10):
+    for comp in range(2, 2000, 1):
         global pca, extra_adding
         pca = PCA(n_components=comp)
         extra_adding = 0
