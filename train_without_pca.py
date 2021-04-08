@@ -68,7 +68,8 @@ class Model(nn.Module):
         x = F.relu(self.fc4(x))
         x = F.relu(self.fc5(x))
         # x = torch.pow(x, 0.3)
-        # x /= torch.max(x)
+        value, index = torch.max(x, axis=1)
+        x = x/torch.reshape(value, (-1, 1))
         # x = torch.sigmoid(self.fc5(x))
         return x
 
@@ -183,14 +184,20 @@ if __name__ == '__main__':
 
     y_data = y_data.detach().numpy()
     y_pred = y_pred.detach().numpy()
-    
+
+    #no need in fact, double check
+    y_pred = np.array(np.clip(np.squeeze(np.array(y_pred)/\
+            (y_pred.max(axis=1).reshape(-1, 1))), 0, 1))
+   
+    # print(y_data.max(axis=1).shape, y_data.max(axis=1))
+    # print(y_pred.max(axis=1).shape, y_pred.max(axis=1))
     # print(y_data.shape, y_pred.shape)
     # check error
     err_sum = 0
     for i in range(y_data.shape[0]):
         save_data = np.squeeze(np.array([y_data[i], y_pred[i]]))
         np.savetxt('pic_data/data'+ str(i + moving) +'.txt', save_data)
-        err_sum += abs(y_data[i].mean() - y_pred[i].mean())
+        err_sum += np.abs(y_data[i] - y_pred[i]).mean()
         # print(y_data.shape[0], y_data[i].mean(), y_pred[i].mean(), 
         #        np.amax(y_pred[i]), np.amax(y_data[i]))
     print(err_sum/y_data.shape[0])

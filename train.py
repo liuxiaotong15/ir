@@ -69,7 +69,7 @@ class Model(nn.Module):
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
-        x = F.relu(self.fc5(x))
+        x = self.fc5(x)
         # x = torch.pow(x, 0.3)
         # x /= torch.max(x)
         # x = torch.sigmoid(self.fc5(x))
@@ -109,28 +109,34 @@ def extract_descriptor(rows_input):
 
     #### pca ####
     global pca
-    targets = pca.fit_transform(targets)
+    pca_targets = pca.fit_transform(targets)
     #### shuffle together ####
-    shfl = list(zip(bocs, targets, row_ids, syms))
+    shfl = list(zip(bocs, pca_targets, targets, row_ids, syms))
     random.shuffle(shfl)
-    bocs, targets, row_ids, syms = zip(*shfl)
+    bocs, pca_targets, targets, row_ids, syms = zip(*shfl)
     for i in range(len(row_ids)):
         id_sym_dict[row_ids[i]] = syms[i]
     
     np.save('data_id.npy', id_sym_dict) 
 
-    return bocs, targets
+    return bocs, pca_targets, targets
 
 if __name__ == '__main__':
-    for comp in range(2, 2000, 1):
+    for comp in range(100, 101, 10):
         global pca, extra_adding
         pca = PCA(n_components=comp)
         extra_adding = 0
-        boc_lst_all, tgt_lst_all = extract_descriptor(rows_ir[:])
+        boc_lst_all, tgt_lst_all, orig_lst_all = extract_descriptor(rows_ir[:])
         # training dataset
-        boc_lst, tgt_lst = boc_lst_all[:int(train_ratio * len(rows_ir))], tgt_lst_all[:int(train_ratio * len(rows_ir))]
+        boc_lst, tgt_lst, orig_tgt_lst = \
+        boc_lst_all[:int(train_ratio * len(rows_ir))],\
+        tgt_lst_all[:int(train_ratio * len(rows_ir))],\
+        orig_lst_all[:int(train_ratio * len(rows_ir))]
         # vali dataset 
-        vali_boc_lst, vali_tgt_lst = boc_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))], tgt_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))]
+        vali_boc_lst, vali_tgt_lst, vali_orig_lst = \
+        boc_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))],\
+        tgt_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))],\
+        orig_lst_all[int(train_ratio * len(rows_ir)):int((train_ratio + vali_ratio) * len(rows_ir))]
 
         # train
         model = Model(boc_lst[0].shape[0], tgt_lst[0].shape[0])
@@ -183,7 +189,11 @@ if __name__ == '__main__':
         model.load_state_dict(torch.load('best_model.dict'))
         # inference dataset
         moving = int((train_ratio+vali_ratio) * len(rows_ir))
-        boc_lst, tgt_lst = boc_lst_all[moving:], tgt_lst_all[moving:]
+        boc_lst, tgt_lst, orig_lst =\
+        boc_lst_all[moving:],\
+        tgt_lst_all[moving:],\
+        orig_lst_all[moving:]
+        
         # inference
         x_data = torch.from_numpy(np.array(boc_lst)).to('cpu')
         y_data = torch.from_numpy(np.array(tgt_lst)).to('cpu')
@@ -193,16 +203,26 @@ if __name__ == '__main__':
         # inverse pca
         inv_pca = np.matrix(pca.components_)
         y_data = y_data.detach().numpy() * inv_pca + pca.mean_
+        y_data = np.squeeze(np.array(y_data))
         y_pred = y_pred.detach().numpy() * inv_pca + pca.mean_
-        
-        # print(y_data.shape, y_pred.shape)
+        y_pred = np.array(np.clip(np.squeeze(np.array(y_pred)/\
+                (y_pred.max(axis=1).reshape(-1, 1))), 0, 1))
+        y_orig = np.array(orig_lst)
+        # print(y_orig.max(axis=1).shape, y_orig.max(axis=1))
+        # print(y_orig[0].shape, y_data[0].shape, y_pred[0].shape, y_data.shape[0])
+        # print(type(y_orig[0]), type(y_data[0]), type(y_pred[0]), y_data.shape[0])
         # check error
-        err_sum = 0
+        err_sum_orig_pred = 0
+        err_sum_pca_orig = 0
+        err_sum_pca_pred = 0
         for i in range(y_data.shape[0]):
-            save_data = np.squeeze(np.array([y_data[i], y_pred[i]]))
-            np.savetxt('pic_data/data'+ str(i + moving) +'.txt', save_data)
-            err_sum += abs(y_data[i].mean() - y_pred[i].mean())
+            dump_data = np.array([y_orig[i], y_pred[i], y_data[i]])
+            np.savetxt('pic_data/data'+ str(i + moving) +'.txt', dump_data)
+            err_sum_orig_pred += np.abs(y_orig[i] - y_pred[i]).mean()
+            err_sum_pca_pred += np.abs(y_data[i] - y_pred[i]).mean()
+            err_sum_pca_orig += np.abs(y_data[i] - y_orig[i]).mean()
             # print(y_data.shape[0], y_data[i].mean(), y_pred[i].mean(), 
             #        np.amax(y_pred[i]), np.amax(y_data[i]))
-        print(comp, err_sum/y_data.shape[0])
+        print(comp, err_sum_orig_pred/y_data.shape[0],
+                err_sum_pca_pred/y_data.shape[0], err_sum_pca_orig/y_data.shape[0])
 
