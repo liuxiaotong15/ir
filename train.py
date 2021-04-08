@@ -5,6 +5,25 @@ import random, pickle
 import numpy as np
 from ase.formula import Formula
 
+from dscribe.descriptors import CoulombMatrix
+cm_dscrb = CoulombMatrix(n_atoms_max=50,)
+
+from dscribe.descriptors import SOAP
+
+species = ["H", "C", "O", "N", "F"]
+rcut = 6.0
+nmax = 8
+lmax = 6
+
+# Setting up the SOAP descriptor
+soap = SOAP(
+    species=species,
+    periodic=False,
+    rcut=rcut,
+    nmax=nmax,
+    lmax=lmax,
+)
+
 from sklearn.decomposition import PCA
 # pca = PCA(n_components=600)
 
@@ -121,12 +140,44 @@ def extract_descriptor(rows_input):
 
     return bocs, pca_targets, targets
 
+def extract_descriptor_dscribe(rows_input):
+    global extra_adding
+    # print('extract descriptor start')
+    cm, targets = [], []
+    row_ids, syms = [], [] 
+    id_sym_dict = {}
+    for row in rows_input:
+        row_ids.append(row.id)
+        syms.append(str(row.toatoms().symbols))
+        # cm.append(cm_dscrb.create(row.toatoms()))
+        cm.append(soap.create(row.toatoms())[0])
+
+        #### read ir targets from ir.db ##############
+        s = np.array(row.data.ir_spectrum[1])
+        targets.append(s/np.amax(s))
+
+    #### pca ####
+    global pca
+    pca_targets = pca.fit_transform(targets)
+    #### shuffle together ####
+    shfl = list(zip(cm, pca_targets, targets, row_ids, syms))
+    random.shuffle(shfl)
+    cm, pca_targets, targets, row_ids, syms = zip(*shfl)
+    for i in range(len(row_ids)):
+        id_sym_dict[row_ids[i]] = syms[i]
+    
+    np.save('data_id.npy', id_sym_dict) 
+
+    return cm, pca_targets, targets
+
+
 if __name__ == '__main__':
     for comp in range(100, 101, 10):
         global pca, extra_adding
         pca = PCA(n_components=comp)
         extra_adding = 0
         boc_lst_all, tgt_lst_all, orig_lst_all = extract_descriptor(rows_ir[:])
+        # boc_lst_all, tgt_lst_all, orig_lst_all = extract_descriptor_dscribe(rows_ir[:])
         # training dataset
         boc_lst, tgt_lst, orig_tgt_lst = \
         boc_lst_all[:int(train_ratio * len(rows_ir))],\
